@@ -9289,8 +9289,7 @@ html[data-theme="dark"] #gate#gate > .gb{box-shadow:0 22px 60px rgba(0,0,0,.6),0
         'body.treino #side{top:calc(34px + env(safe-area-inset-top))!important}' +
         'body.treino #bkbar{display:none!important}' +
         '.mt-tr-btn{margin-top:10px!important;border:2px dashed #f59e0b!important;background:rgba(245,158,11,.12)!important;color:inherit!important;font-weight:700!important}' +
-        '@media print{body::after{content:"Criado por Izaque Alberto Saíde";position:fixed;right:6mm;bottom:3mm;font:7pt Arial,sans-serif;color:#555;min-height:8mm;line-height:8mm;padding-left:10mm;' +
-        'background:url(' + window.GE_LOGO + ') left center/8mm 8mm no-repeat}}';
+        '';
     document.head.appendChild(css);
 
 
@@ -13751,18 +13750,11 @@ html:root:root #gate .gb{max-height:none!important;overflow:visible!important}
             document.body.removeChild(fr); cb({ cw: cw, node: node, total: total, cand: cand, forc: forc });
         }, 450);
     }
-    /* Rodapé de cada folha (como na impressão normal): logótipo + apoio + criador */
-    function rodape() {
-        var u = Math.round(8 * PX), logo = '';
-        try { logo = (window.GE_LOGO && /^data:image\//.test(window.GE_LOGO)) ? window.GE_LOGO : ''; } catch (e) { }
-        return '<div style="position:absolute;right:' + Math.round(6 * PX) + 'px;bottom:' + Math.round(3 * PX) + 'px;height:' + u + 'px;line-height:' + u + 'px;padding-left:' + (logo ? Math.round(10 * PX) : 0) + 'px;font:7pt Arial,sans-serif;color:#555;white-space:nowrap' +
-            (logo ? ';background:url(&quot;' + logo + '&quot;) left center/' + u + 'px ' + u + 'px no-repeat' : '') + '">Apoio: 875321732 · Criado por Izaque Alberto Saíde</div>';
-    }
     function pintar(pg, M, ini, fim, sc) {
         return new Promise(function (ok, no) {
             var W = Math.round(pg.w * PX), H = Math.round(pg.h * PX), mp = Math.round(pg.m * PX), ch = H - 2 * mp;
             var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:' + W + 'px;height:' + H + 'px;background:#fff;position:relative;overflow:hidden"><style>' + esc(css()) + '</style>' +
-                '<div style="position:absolute;left:' + mp + 'px;top:' + mp + 'px;width:' + M.cw + 'px;height:' + Math.min(ch, Math.ceil(fim - ini)) + 'px;overflow:hidden"><div style="margin-top:-' + ini + 'px">' + M.node + '</div></div>' + rodape() + '</div></foreignObject></svg>';
+                '<div style="position:absolute;left:' + mp + 'px;top:' + mp + 'px;width:' + M.cw + 'px;height:' + Math.min(ch, Math.ceil(fim - ini)) + 'px;overflow:hidden"><div style="margin-top:-' + ini + 'px">' + M.node + '</div></div></div></foreignObject></svg>';
             var im = new Image(); im.onload = function () {
                 try { var c = document.createElement('canvas'); c.width = Math.round(W * sc); c.height = Math.round(H * sc); var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height); var b = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]); ok({ w: c.width, h: c.height, jpg: bytes(b) }); } catch (e) { no(e); }
             }; im.onerror = no; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -14980,7 +14972,7 @@ html[data-theme="dark"]{--rs-th:#141d52;--rs-card:#0c1238;--rs-line:rgba(77,123,
 html:root:root,html:root:root body{overflow-x:hidden;-webkit-text-size-adjust:100%}
 html.rs-d:root #mbtn,html.rs-t:root #mbtn{display:none!important}
 html.rs-m:root body:not(.lock):not(.nomenu) #mbtn{z-index:20}
-html.rs-m:root body:not(.lock):not(.nomenu) #app .top{padding-left:64px}
+html.rs-m:root body:not(.lock):not(.nomenu) #app .top{padding-left:58px!important}
 html:root:root body:not(.lock):not(.nomenu):not(.side) .top{margin-left:0!important}
 #app img,#app canvas,#app svg{max-width:100%}
 #app .tw{max-width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
