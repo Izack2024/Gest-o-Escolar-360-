@@ -13751,11 +13751,18 @@ html:root:root #gate .gb{max-height:none!important;overflow:visible!important}
             document.body.removeChild(fr); cb({ cw: cw, node: node, total: total, cand: cand, forc: forc });
         }, 450);
     }
+    /* Rodapé de cada folha (como na impressão normal): logótipo + apoio + criador */
+    function rodape() {
+        var u = Math.round(8 * PX), logo = '';
+        try { logo = (window.GE_LOGO && /^data:image\//.test(window.GE_LOGO)) ? window.GE_LOGO : ''; } catch (e) { }
+        return '<div style="position:absolute;right:' + Math.round(6 * PX) + 'px;bottom:' + Math.round(3 * PX) + 'px;height:' + u + 'px;line-height:' + u + 'px;padding-left:' + (logo ? Math.round(10 * PX) : 0) + 'px;font:7pt Arial,sans-serif;color:#555;white-space:nowrap' +
+            (logo ? ';background:url(&quot;' + logo + '&quot;) left center/' + u + 'px ' + u + 'px no-repeat' : '') + '">Apoio: 875321732 · Criado por Izaque Alberto Saíde</div>';
+    }
     function pintar(pg, M, ini, fim, sc) {
         return new Promise(function (ok, no) {
             var W = Math.round(pg.w * PX), H = Math.round(pg.h * PX), mp = Math.round(pg.m * PX), ch = H - 2 * mp;
             var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:' + W + 'px;height:' + H + 'px;background:#fff;position:relative;overflow:hidden"><style>' + esc(css()) + '</style>' +
-                '<div style="position:absolute;left:' + mp + 'px;top:' + mp + 'px;width:' + M.cw + 'px;height:' + Math.min(ch, Math.ceil(fim - ini)) + 'px;overflow:hidden"><div style="margin-top:-' + ini + 'px">' + M.node + '</div></div></div></foreignObject></svg>';
+                '<div style="position:absolute;left:' + mp + 'px;top:' + mp + 'px;width:' + M.cw + 'px;height:' + Math.min(ch, Math.ceil(fim - ini)) + 'px;overflow:hidden"><div style="margin-top:-' + ini + 'px">' + M.node + '</div></div>' + rodape() + '</div></foreignObject></svg>';
             var im = new Image(); im.onload = function () {
                 try { var c = document.createElement('canvas'); c.width = Math.round(W * sc); c.height = Math.round(H * sc); var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height); var b = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]); ok({ w: c.width, h: c.height, jpg: bytes(b) }); } catch (e) { no(e); }
             }; im.onerror = no; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -13768,7 +13775,8 @@ html:root:root #gate .gb{max-height:none!important;overflow:visible!important}
             var ch = Math.round((pg.h - 2 * pg.m) * PX), br = quebras(M.total, ch, M.cand, M.forc), sc = Math.min(2, 2400 / (pg.w * PX)), res = [], i = 0;
             (function prox() {
                 if (i >= br.length - 1) {
-                    var nome = 'documento_' + new Date().toISOString().slice(0, 10) + '.pdf';
+                    var h = pa.querySelector('h1,h2,h3'), tt = ((h && h.textContent) || 'documento').trim().slice(0, 50).replace(/[^\w\u00C0-\u017F -]+/g, '').trim().replace(/\s+/g, '-') || 'documento';
+                    var nome = 'GestaoEscolar360-' + tt + '-' + new Date().toISOString().slice(0, 10) + '.pdf';
                     download(new Blob([montarPDF(res, Math.round(pg.w * 72 / 25.4 * 100) / 100, Math.round(pg.h * 72 / 25.4 * 100) / 100)], { type: 'application/pdf' }), nome); ocupado = false; aviso('PDF guardado: ' + nome); return;
                 }
                 aviso('A gerar o PDF… página ' + (i + 1) + ' de ' + (br.length - 1));
@@ -13787,7 +13795,13 @@ html:root:root #gate .gb{max-height:none!important;overflow:visible!important}
         document.body.appendChild(o);
     }
     var anterior = window.print;
-    window.print = function () { if (document.getElementById('ge-pdfbox')) return; escolha(function () { anterior.call(window); }); };
+    /* Impressão = PDF descarregado automaticamente (sem menu). Se falhar, usa o painel de impressão antigo como recurso. */
+    window.print = function () {
+        if (ocupado) return;
+        var pa = document.getElementById('printArea');
+        if (!pa || !pa.innerHTML.trim()) { return anterior.apply(window, arguments); }
+        gerar(function () { anterior.call(window); });
+    };
     window.geGerarPDF = gerar; window.gePdfTeste = { pagina: pagina, quebras: quebras, montarPDF: montarPDF };
 })();
 </script>
@@ -14964,7 +14978,9 @@ html[data-theme="dark"] .gx{--g-ok:#39ff88;--g-no:#ff6b86;--g-pe:#43c0e0;--g-de:
 :root{--rs-w:264px;--rs-th:#eaf0ff;--rs-card:#fff;--rs-line:#c9d8ff;--rs-bar:linear-gradient(135deg,#0a1f7a,#0038ff);--rs-page:#eef3ff}
 html[data-theme="dark"]{--rs-th:#141d52;--rs-card:#0c1238;--rs-line:rgba(77,123,255,.35)}
 html:root:root,html:root:root body{overflow-x:hidden;-webkit-text-size-adjust:100%}
-html:root:root #mbtn{display:none!important}
+html.rs-d:root #mbtn,html.rs-t:root #mbtn{display:none!important}
+html.rs-m:root body:not(.lock):not(.nomenu) #mbtn{z-index:20}
+html.rs-m:root body:not(.lock):not(.nomenu) #app .top{padding-left:64px}
 html:root:root body:not(.lock):not(.nomenu):not(.side) .top{margin-left:0!important}
 #app img,#app canvas,#app svg{max-width:100%}
 #app .tw{max-width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
@@ -15012,7 +15028,7 @@ html.rs-t:root .sheet{max-width:min(760px,94vw);border-radius:20px}
 }
 /* ===== TELEFONE (<768px): aplicação móvel nativa ===== */
 @media screen and (max-width:767.98px){
-html.rs-m:root body.side,html.rs-m:root body{padding-left:0!important;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+html.rs-m:root body.side,html.rs-m:root body{padding-left:0!important;padding-bottom:env(safe-area-inset-bottom)}
 html.rs-m:root body:not(.dopen) #side{display:none!important}
 html.rs-m:root #app{padding:0 12px 24px;max-width:100%}
 html.rs-m:root #app .top{position:sticky;top:0;z-index:12;margin:0 -12px 14px;padding:calc(10px + env(safe-area-inset-top)) 12px 12px;background:var(--rs-bar);color:#fff;border-radius:0 0 20px 20px;box-shadow:0 6px 18px -8px rgba(0,30,160,.55)}
@@ -15024,8 +15040,8 @@ html.rs-m:root #app .grid,html.rs-m:root .dash-section .grid{grid-template-colum
 html.rs-m:root input,html.rs-m:root select,html.rs-m:root textarea{font-size:16px;min-height:46px}
 html.rs-m:root .btn,html.rs-m:root .ibtn{min-height:44px}
 html.rs-m:root #app .card{padding:14px;border-radius:16px}
-html:root:root #bkbar{left:10px!important;right:84px!important;bottom:calc(74px + env(safe-area-inset-bottom))!important;width:auto;z-index:39;padding:10px 12px}
-html.rs-m:root .fab{bottom:calc(74px + env(safe-area-inset-bottom))!important;right:14px!important;z-index:39}
+html:root:root #bkbar{left:10px!important;right:84px!important;bottom:calc(16px + env(safe-area-inset-bottom))!important;width:auto;z-index:39;padding:10px 12px}
+html.rs-m:root .fab{bottom:calc(20px + env(safe-area-inset-bottom))!important;right:14px!important;z-index:39}
 html.rs-m:root .ov{align-items:flex-end;padding:0}
 html.rs-m:root .sheet{max-width:100%;max-height:92dvh;border-radius:24px 24px 0 0}
 html.rs-m:root .sheet::before{content:"";display:block;width:42px;height:4px;border-radius:4px;background:var(--rs-line);margin:-8px auto 14px}
@@ -15036,7 +15052,7 @@ html.rs-m:root table.rs-stack tr{display:block;background:var(--rs-card);border:
 html.rs-m:root table.rs-stack td{display:flex;justify-content:space-between;gap:12px;align-items:center;border:0;border-bottom:1px solid var(--rs-line);padding:9px 0;text-align:right;white-space:normal}
 html.rs-m:root table.rs-stack td:last-child{border-bottom:0}
 html.rs-m:root table.rs-stack td::before{content:attr(data-l);font-weight:600;opacity:.7;text-align:left;flex:none;max-width:45%}
-html.rs-m:root #rsnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;height:calc(64px + env(safe-area-inset-bottom));padding:6px 6px env(safe-area-inset-bottom);background:var(--rs-card);border-top:1px solid var(--rs-line);box-shadow:0 -8px 24px -12px rgba(10,31,122,.35)}
+html.rs-m:root #rsnav{display:none!important;position:fixed;left:0;right:0;bottom:0;z-index:40;height:calc(64px + env(safe-area-inset-bottom));padding:6px 6px env(safe-area-inset-bottom);background:var(--rs-card);border-top:1px solid var(--rs-line);box-shadow:0 -8px 24px -12px rgba(10,31,122,.35)}
 html.rs-m:root body.lock #rsnav,html.rs-m:root body.dopen #rsnav{display:none}
 #rsnav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:none;color:#4a5f99;font:600 11px/1.1 inherit;border-radius:14px;min-width:0}
 #rsnav button svg{width:24px;height:24px}
