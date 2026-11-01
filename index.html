@@ -260,7 +260,7 @@ table.s tr.tot td{font-weight:700;border-bottom:0}
 .cards .empty{grid-column:1/-1}
 
 /* ---------- ANDROID (telefone) ---------- */
-body.mob{overscroll-behavior-y:contain;-webkit-text-size-adjust:100%}
+body.mob{overscroll-behavior-y:auto;-webkit-text-size-adjust:100%}
 body.mob button,body.mob .tile,body.mob .chip,body.mob select{touch-action:manipulation}
 body.mob #app{max-width:640px;padding-bottom:120px}
 body.mob #app.wide{max-width:100%;padding-left:10px;padding-right:10px}
@@ -11181,7 +11181,7 @@ html[data-theme="dark"]:root:root .ge-esc{color:#39ff88!important;-webkit-text-f
 <style id="pro360">
 @media screen{
 html:root:root{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;scroll-behavior:smooth;-webkit-tap-highlight-color:transparent}
-html:root:root body{font-feature-settings:"tnum" 1,"cv11" 1;overscroll-behavior-y:none}
+html:root:root body{font-feature-settings:"tnum" 1,"cv11" 1}
 html:root:root ::selection{background:rgba(0,56,255,.35);color:inherit}
 html:root:root *{scrollbar-width:thin;scrollbar-color:rgba(120,140,180,.45) transparent}
 html:root:root *::-webkit-scrollbar{width:9px;height:9px}
@@ -14916,7 +14916,9 @@ html[data-theme="dark"] .gx{--g-ok:#39ff88;--g-no:#ff6b86;--g-pe:#43c0e0;--g-de:
 @media screen{
 :root{--rs-w:264px;--rs-th:#eaf0ff;--rs-card:#fff;--rs-line:#c9d8ff;--rs-bar:linear-gradient(135deg,#0a1f7a,#0038ff);--rs-page:#eef3ff}
 html[data-theme="dark"]{--rs-th:#141d52;--rs-card:#0c1238;--rs-line:rgba(77,123,255,.35)}
-html:root:root,html:root:root body{overflow-x:hidden;-webkit-text-size-adjust:100%}
+html:root:root{overflow-x:hidden;-webkit-text-size-adjust:100%}
+/* CORREÇÃO ROLAGEM: html E body com overflow-x:hidden faziam do body um segundo contentor de rolagem (a página descia e não subia). Agora só o html corta o eixo X; o body não cria rolagem própria. */
+html:root:root body{overflow-x:clip!important;overflow-y:visible!important;-webkit-text-size-adjust:100%;overscroll-behavior-y:auto!important;height:auto}
 html.rs-d:root #mbtn,html.rs-t:root #mbtn{display:none!important}
 html.rs-m:root body:not(.lock):not(.nomenu) #mbtn{z-index:20}
 html.rs-m:root body:not(.lock):not(.nomenu) #app .top{padding-left:58px!important}
