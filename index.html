@@ -15963,7 +15963,7 @@ html:root:root #gate .ao-row .btn{flex:1;margin:0!important;min-height:40px;bord
     /* ---------- 1) Consolidação Central ---------- */
     var GR = [
         { id: 'geral', n: 'Visão geral', i: 'home', t: ['graficos', 'painel', 'estado', 'alertas'] },
-        { id: 'dados', n: 'Escolas e dados', i: 'db', t: ['escolas', 'alturma', 'disc', 'prof', 'importar'] },
+        { id: 'dados', n: 'Escolas e dados', i: 'db', t: ['escolas', 'alturma', 'analise', 'qual', 'disc', 'prof', 'importar'] },
         { id: 'rel', n: 'Relatórios e mapas', i: 'rep', t: ['relat', 'mapas', 'mapaman', 'evol', 'evol3', 'trim', 'hier', 'zips', 'psico'] },
         { id: 'ped', n: 'Pedagógico', i: 'edu', t: ['notas', 'conselho'] },
         { id: 'com', n: 'Comunicação', i: 'msg', t: ['msg'] },
@@ -16513,6 +16513,220 @@ body.pc #app .card.gx-cols>label{break-after:avoid}
     var gt = document.getElementById('gate');
     if (gt && window.MutationObserver) new MutationObserver(function () { admin(); }).observe(gt, { childList: true, subtree: true });
     acordeao(); colunas(); admin();
+})();
+</script>
+<script id="ge360-qualidade-analise">
+/* Gestão Escolar 360° — Qualidade dos dados, análise de alunos/professores e auditoria alargada.
+   Integrado no painel do Administrador Geral existente (separadores «Qualidade dos dados» e «Alunos e professores»).
+   Só lê e assinala: nunca elimina nem altera registos das escolas. */
+(function () {
+    'use strict';
+    try {
+        var G = window;
+        if (!G.GE_V2 || !G.GE_TABS || !G.GE_pautas || !G.GE_escInfo || !G.GE_pronto || typeof cons === 'undefined' || typeof consRender !== 'function') return;
+        if (G.GE_V2.qual) return;
+
+        function E(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+        function N(s) { s = String(s == null ? '' : s).toLowerCase().trim().replace(/\s+/g, ' '); try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { } return s; }
+        function sx(a) { return a && a.sexo === 'M' ? 'M' : 'H'; }
+        function ehDes(a) { return !!(a && (a.desist || a.desistHist)); }
+
+        /* ---------- auditoria alargada (gravada em ge360_audit, que o painel já sincroniza com o servidor) ---------- */
+        function audit(acao, ref) {
+            try {
+                var L = JSON.parse(localStorage.getItem('ge360_audit') || '[]');
+                L.push({ t: new Date().toISOString(), u: (G.SESSAO && G.SESSAO.nome) || '?', a: acao, id: ref || '' });
+                localStorage.setItem('ge360_audit', JSON.stringify(L.slice(-300)));
+            } catch (e) { }
+        }
+        G.geAudit = audit;
+        var BS = { bsLer: 'Leitura de backup de escola', bsAbrir: 'Abertura de backup de escola', bsDown: 'Descarga de backup de escola', bsDel: 'Eliminação de backup de escola (pedido)', bcExt: 'Cópia externa de backups', bcGeral: 'Cópia geral de backups', bcCriar: 'Criação de cópia de segurança' };
+        cons.addEventListener('click', function (ev) {
+            var b = ev.target && ev.target.closest ? ev.target.closest('[data-ca]') : null; if (!b) return;
+            var a = b.getAttribute('data-ca'); if (BS[a]) audit(BS[a], b.getAttribute('data-id') || b.getAttribute('data-n') || '');
+        }, true);
+
+        /* ---------- dados ---------- */
+        function refAno(d) { var y = parseInt(d && d.ano, 10); return isNaN(y) ? new Date().getFullYear() : y; }
+        function nasc(s) {
+            s = String(s || '').trim(); if (!s) return { v: 'vazio' };
+            var m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s), d, mo, y;
+            if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+            else { m = /^(\d{1,2})[\/.\- ](\d{1,2})[\/.\- ](\d{4})$/.exec(s); if (!m) { m = /^(\d{4})$/.exec(s); if (m) return { v: 'ok', y: +m[1] }; return { v: 'mau' }; } d = +m[1]; mo = +m[2]; y = +m[3]; }
+            if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1900) return { v: 'mau' };
+            return { v: 'ok', y: y, t: new Date(y, mo - 1, d).getTime() };
+        }
+        function recolher() {
+            var P = G.GE_pautas() || [], T = [];
+            P.forEach(function (x) {
+                var d = x.dados; if (!d || !Array.isArray(d.alunos)) return;
+                var i = G.GE_escInfo(x.escola_id) || {};
+                T.push({ eid: x.escola_id, esc: i.nome || String(x.escola_id), dist: i.dist || 'Sem distrito', prov: i.prov || 'Sem província', zip: i.zip || 'Sem ZIP', d: d,
+                    nome: (d.classe || '?') + 'ª classe, turma ' + (d.turma || '?') + (d.turno ? ' (' + d.turno + ')' : '') });
+            });
+            return T;
+        }
+        var Q = { nivel: 'g', val: '', ano: '', sev: '', busca: '', tab: 'qual' };
+        function opcoes(T) {
+            var o = { prov: {}, dist: {}, zip: {}, esc: {}, ano: {} };
+            T.forEach(function (t) { o.prov[t.prov] = 1; o.dist[t.dist] = 1; o.zip[t.zip] = 1; o.esc[t.eid] = t.esc; if (t.d.ano) o.ano[t.d.ano] = 1; });
+            return o;
+        }
+        function filtrar(T) {
+            return T.filter(function (t) {
+                if (Q.ano && String(t.d.ano) !== Q.ano) return false;
+                if (Q.nivel === 'g' || !Q.val) return true;
+                return (Q.nivel === 'prov' && t.prov === Q.val) || (Q.nivel === 'dist' && t.dist === Q.val) || (Q.nivel === 'zip' && t.zip === Q.val) || (Q.nivel === 'esc' && String(t.eid) === Q.val);
+            });
+        }
+        function filtros(T) {
+            var o = opcoes(T), NV = [['g', 'Global (todas as escolas)'], ['prov', 'Por província'], ['dist', 'Por distrito'], ['zip', 'Por ZIP'], ['esc', 'Por escola']];
+            var lst = Q.nivel === 'g' ? [] : Q.nivel === 'esc' ? Object.keys(o.esc).map(function (k) { return [k, o.esc[k]]; }).sort(function (a, b) { return a[1].localeCompare(b[1], 'pt'); }) : Object.keys(o[Q.nivel]).sort(G.geZipCmp && Q.nivel === 'zip' ? G.geZipCmp : undefined).map(function (k) { return [k, k]; });
+            if (Q.val && !lst.some(function (x) { return String(x[0]) === Q.val; })) Q.val = '';
+            var anos = Object.keys(o.ano).sort();
+            var sel = function (id, op, v) { return '<select id="' + id + '" style="width:auto;max-width:100%">' + op.map(function (x) { return '<option value="' + E(x[0]) + '"' + (String(v) === String(x[0]) ? ' selected' : '') + '>' + E(x[1]) + '</option>'; }).join('') + '</select>'; };
+            return '<div class="bx" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + sel('qd_nivel', NV, Q.nivel) +
+                (Q.nivel !== 'g' ? sel('qd_val', [['', 'Todos']].concat(lst), Q.val) : '') + sel('qd_ano', [['', 'Todos os anos lectivos']].concat(anos.map(function (a) { return [a, 'Ano lectivo ' + a]; })), Q.ano) + '</div>';
+        }
+
+        /* ---------- verificações ---------- */
+        function verificar(T) {
+            var A = [], add = function (sev, tipo, t, det, ref) { A.push({ sev: sev, tipo: tipo, esc: t ? t.esc : '', zip: t ? t.zip : '', turma: t ? t.nome : '', det: det, ref: ref || '' }); };
+            var porNome = {}, porNascEsc = {}, porBI = {}, prof = {};
+            T.forEach(function (t) {
+                var d = t.d, als = d.alunos || [], cl = parseInt(d.classe, 10), ano = refAno(d), semNasc = 0, malNasc = 0;
+                if (!d.classe || !d.turma) add('alta', 'Turma incompleta', t, 'Classe ou turma por preencher.');
+                if (!als.length) add('media', 'Turma sem alunos', t, 'Não há alunos registados.');
+                if (!Array.isArray(d.disciplinas) || !d.disciplinas.length) add('media', 'Turma sem disciplinas', t, 'Nenhuma disciplina atribuída.');
+                if (!String(d.professor || '').trim()) add('baixa', 'Turma sem professor', t, 'Professor/director de turma não indicado.');
+                var nd = parseInt(d.numAlunos, 10); if (!isNaN(nd) && als.length && nd !== als.length) add('baixa', 'Número de alunos divergente', t, 'Declarado ' + nd + ', registados ' + als.length + '.');
+                var nomesTurma = {};
+                als.forEach(function (a) {
+                    var nm = N(a.nome); if (!nm) { add('alta', 'Aluno sem nome', t, 'Registo sem nome completo.'); return; }
+                    if (a.sexo !== 'M' && a.sexo !== 'H') add('baixa', 'Sexo em falta', t, a.nome);
+                    var n = nasc(a.nasc);
+                    if (n.v === 'vazio') semNasc++;
+                    else if (n.v === 'mau') { malNasc++; add('media', 'Data de nascimento inválida', t, a.nome + ': «' + a.nasc + '»'); }
+                    else {
+                        var idade = ano - n.y;
+                        if (n.t && n.t > Date.now()) add('alta', 'Nascimento no futuro', t, a.nome + ': ' + a.nasc);
+                        else if (idade < 4 || idade > 30) add('alta', 'Idade incompatível', t, a.nome + ': ' + idade + ' anos em ' + ano + '.');
+                        else if (!isNaN(cl) && Math.abs(idade - (cl + 5)) > 7) add('baixa', 'Idade atípica para a classe', t, a.nome + ': ' + idade + ' anos na ' + cl + 'ª classe.');
+                    }
+                    if (nomesTurma[nm]) add('media', 'Nome repetido na turma', t, a.nome); nomesTurma[nm] = 1;
+                    var kE = t.eid + '|' + (d.ano || '') + '|' + nm; (porNome[kE] = porNome[kE] || []).push({ t: t, a: a });
+                    if (n.v === 'ok') { var kN = (d.ano || '') + '|' + nm + '|' + (n.t || n.y); (porNascEsc[kN] = porNascEsc[kN] || []).push({ t: t, a: a }); }
+                    var bi = N(a.bi).replace(/[^a-z0-9]/g, ''); if (bi.length >= 6) { var kB = (d.ano || '') + '|' + bi; (porBI[kB] = porBI[kB] || []).push({ t: t, a: a }); }
+                });
+                if (semNasc && als.length) add(semNasc === als.length ? 'media' : 'baixa', 'Datas de nascimento em falta', t, semNasc + ' de ' + als.length + ' aluno(s) sem data de nascimento.');
+                var pn = N(d.professor); if (pn) {
+                    var h = 0, ch = d.cargaH || {}; Object.keys(ch).forEach(function (k) { var v = parseFloat(String(ch[k]).replace(',', '.')); if (!isNaN(v) && v > 0) h += v; });
+                    var kP = pn + '|' + (d.ano || ''); var r = prof[kP] = prof[kP] || { nome: d.professor, esc: {}, h: 0, t: [] };
+                    r.esc[t.eid] = t.esc; r.h += h; r.t.push(t);
+                }
+            });
+            Object.keys(porNome).forEach(function (k) { var g = porNome[k]; var tu = {}; g.forEach(function (x) { tu[x.t.nome] = 1; }); if (g.length > 1 && Object.keys(tu).length > 1) add('media', 'Aluno em mais de uma turma da escola', g[0].t, g[0].a.nome + ' — ' + Object.keys(tu).join(' · ')); });
+            Object.keys(porNascEsc).forEach(function (k) { var g = porNascEsc[k], es = {}; g.forEach(function (x) { es[x.t.eid] = x.t.esc; }); if (Object.keys(es).length > 1) add('alta', 'Possível aluno repetido entre escolas', g[0].t, g[0].a.nome + ' (mesmo nome e data de nascimento) — ' + Object.keys(es).map(function (z) { return es[z]; }).join(' · ')); });
+            Object.keys(porBI).forEach(function (k) { var g = porBI[k], nm = {}; g.forEach(function (x) { nm[N(x.a.nome)] = 1; }); if (g.length > 1) add(Object.keys(nm).length > 1 ? 'alta' : 'media', 'Número de identificação repetido', g[0].t, 'BI ' + g[0].a.bi + ' em ' + g.length + ' registo(s): ' + Object.keys(nm).length + ' nome(s) diferente(s).'); });
+            Object.keys(prof).forEach(function (k) {
+                var r = prof[k], ne = Object.keys(r.esc).length;
+                if (ne > 1) add('baixa', 'Professor em mais de uma escola', r.t[0], r.nome + ' — ' + Object.keys(r.esc).map(function (z) { return r.esc[z]; }).join(' · ') + ' (confirmar se é a mesma pessoa).');
+                if (r.h > 40) add('media', 'Carga horária excessiva', r.t[0], r.nome + ': ' + Math.round(r.h * 10) / 10 + ' h/semana somadas nas suas turmas.');
+            });
+            var ord = { alta: 0, media: 1, baixa: 2 }; A.sort(function (a, b) { return ord[a.sev] - ord[b.sev] || a.esc.localeCompare(b.esc, 'pt') || a.tipo.localeCompare(b.tipo); });
+            return A;
+        }
+        var SEVN = { alta: 'Alta', media: 'Média', baixa: 'Baixa' }, SEVC = { alta: '#c73752', media: '#b7791f', baixa: '#5b6b8c' };
+        function csv(linhas, nome) {
+            var t = '\ufeff' + linhas.map(function (r) { return r.map(function (c) { c = String(c == null ? '' : c).replace(/"/g, '""'); return /[;"\n]/.test(c) ? '"' + c + '"' : c; }).join(';'); }).join('\r\n');
+            var b = new Blob([t], { type: 'text/csv;charset=utf-8' }), u = URL.createObjectURL(b), a = document.createElement('a');
+            a.href = u; a.download = nome + '_' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 500);
+        }
+        function tab(cab, rows) { return '<div class="tw"><table><tr>' + cab.map(function (x) { return '<th>' + E(x) + '</th>'; }).join('') + '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div>'; }
+
+        /* ---------- separador «Qualidade dos dados» ---------- */
+        var ULT = { A: [] };
+        function vQual() {
+            if (!G.GE_pronto()) return G.GE_avis();
+            var T = recolher(); if (!T.length) return '<div class="bx mu">Ainda não há dados de turmas no servidor.</div>';
+            var F = filtrar(T), A = verificar(F); ULT.A = A;
+            var c = { alta: 0, media: 0, baixa: 0 }; A.forEach(function (x) { c[x.sev]++; });
+            var V = Q.sev ? A.filter(function (x) { return x.sev === Q.sev; }) : A, tipos = {}; A.forEach(function (x) { tipos[x.tipo] = (tipos[x.tipo] || 0) + 1; });
+            var rs = Object.keys(tipos).sort(function (a, b) { return tipos[b] - tipos[a]; }).map(function (k) { return [E(k), String(tipos[k])]; });
+            return filtros(T) +
+                '<p class="mu sm" style="line-height:1.45">Esta verificação apenas <b>assinala</b> casos para o Administrador confirmar com a escola. Nada é eliminado nem alterado automaticamente. ' + F.length + ' turma(s) analisada(s).</p>' +
+                '<div class="bx" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span><b style="color:' + SEVC.alta + '">' + c.alta + '</b> alta(s)</span><span><b style="color:' + SEVC.media + '">' + c.media + '</b> média(s)</span><span><b style="color:' + SEVC.baixa + '">' + c.baixa + '</b> baixa(s)</span>' +
+                '<select id="qd_sev" style="width:auto"><option value="">Todas as gravidades</option><option value="alta"' + (Q.sev === 'alta' ? ' selected' : '') + '>Só alta</option><option value="media"' + (Q.sev === 'media' ? ' selected' : '') + '>Só média</option><option value="baixa"' + (Q.sev === 'baixa' ? ' selected' : '') + '>Só baixa</option></select>' +
+                '<button class="btn pri" data-ca="qdCsv">Exportar CSV</button></div>' +
+                (A.length ? '<h3>Resumo por tipo</h3>' + tab(['Tipo de alerta', 'Casos'], rs) +
+                    '<h3>Alertas' + (V.length > 300 ? ' (primeiros 300 de ' + V.length + '; o CSV tem todos)' : '') + '</h3>' +
+                    tab(['Gravidade', 'Alerta', 'Escola', 'ZIP', 'Turma', 'Detalhe'], V.slice(0, 300).map(function (x) { return ['<b style="color:' + SEVC[x.sev] + '">' + SEVN[x.sev] + '</b>', E(x.tipo), E(x.esc), E(x.zip), E(x.turma), E(x.det)]; }))
+                    : '<div class="bx ok">Sem alertas para o filtro seleccionado.</div>');
+        }
+
+        /* ---------- separador «Alunos e professores» ---------- */
+        function vAnalise() {
+            if (!G.GE_pronto()) return G.GE_avis();
+            var T = recolher(); if (!T.length) return '<div class="bx mu">Ainda não há dados de turmas no servidor.</div>';
+            var F = filtrar(T), es = {}, pf = {}, tot = { t: 0, n: 0, H: 0, M: 0, d: 0 };
+            F.forEach(function (t) {
+                var e = es[t.eid] = es[t.eid] || { nome: t.esc, zip: t.zip, dist: t.dist, t: 0, n: 0, H: 0, M: 0, d: 0, cl: {} };
+                e.t++; tot.t++;
+                (t.d.alunos || []).forEach(function (a) { var s = sx(a); e.n++; tot.n++; e[s]++; tot[s]++; if (ehDes(a)) { e.d++; tot.d++; } e.cl[t.d.classe] = (e.cl[t.d.classe] || 0) + 1; });
+                var pn = N(t.d.professor); if (pn) {
+                    var h = 0, ch = t.d.cargaH || {}; Object.keys(ch).forEach(function (k) { var v = parseFloat(String(ch[k]).replace(',', '.')); if (!isNaN(v) && v > 0) h += v; });
+                    var p = pf[pn + '|' + t.eid] = pf[pn + '|' + t.eid] || { nome: t.d.professor, esc: t.esc, zip: t.zip, t: [], ds: {}, h: 0 };
+                    p.t.push((t.d.classe || '?') + 'ª ' + (t.d.turma || '?')); p.h += h; (t.d.disciplinas || []).forEach(function (x) { p.ds[x] = 1; });
+                }
+            });
+            var L = Object.keys(es).map(function (k) { return es[k]; }).sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt'); });
+            var PL = Object.keys(pf).map(function (k) { return pf[k]; }).sort(function (a, b) { return a.esc.localeCompare(b.esc, 'pt') || a.nome.localeCompare(b.nome, 'pt'); });
+            var busca = N(Q.busca), AL = [];
+            if (busca.length >= 3) F.forEach(function (t) { (t.d.alunos || []).forEach(function (a) { if (N(a.nome).indexOf(busca) >= 0) AL.push([E(a.nome), sx(a), E(a.nasc || ''), E(t.esc), E(t.nome), E(t.d.ano || ''), ehDes(a) ? 'Desistente' : '']); }); });
+            return filtros(T) +
+                '<div class="bx"><b>' + L.length + '</b> escola(s) · <b>' + tot.t + '</b> turma(s) · <b>' + tot.n + '</b> aluno(s) · H ' + tot.H + ' · M ' + tot.M + ' · desistentes ' + tot.d + ' · <b>' + PL.length + '</b> professor(es)</div>' +
+                '<div class="bx" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" data-ca="anCsvE">Exportar escolas (CSV)</button><button class="btn" data-ca="anCsvA">Exportar todos os alunos (CSV)</button><button class="btn" data-ca="anCsvP">Exportar professores (CSV)</button></div>' +
+                '<h3>Alunos por escola</h3>' + tab(['Escola', 'ZIP', 'Turmas', 'Alunos', 'H', 'M', 'Desistentes'], L.map(function (e) { return [E(e.nome), E(e.zip), String(e.t), String(e.n), String(e.H), String(e.M), String(e.d)]; })) +
+                '<h3>Professores, turmas e carga horária</h3><p class="mu sm">A carga é a soma das horas semanais das disciplinas das turmas do professor. Valores acima de 40 h são assinalados em «Qualidade dos dados».</p>' +
+                tab(['Professor', 'Escola', 'Turmas', 'Disciplinas', 'Horas/semana'], PL.slice(0, 400).map(function (p) { return [E(p.nome), E(p.esc), E(p.t.join(', ')), String(Object.keys(p.ds).length), p.h ? '<b style="color:' + (p.h > 40 ? SEVC.alta : 'inherit') + '">' + (Math.round(p.h * 10) / 10) + '</b>' : '—']; })) +
+                '<h3>Pesquisar aluno</h3><input id="qd_busca" type="search" placeholder="Escreva pelo menos 3 letras do nome…" value="' + E(Q.busca) + '" style="width:100%;box-sizing:border-box">' +
+                (busca.length >= 3 ? (AL.length ? '<p class="mu sm">' + AL.length + ' resultado(s)' + (AL.length > 200 ? ' (primeiros 200)' : '') + '</p>' + tab(['Nome', 'Sexo', 'Nascimento', 'Escola', 'Turma', 'Ano', 'Situação'], AL.slice(0, 200)) : '<div class="bx mu">Nenhum aluno encontrado.</div>') : '');
+        }
+
+        /* ---------- eventos ---------- */
+        cons.addEventListener('change', function (ev) {
+            var t = ev.target; if (!t || !t.id || t.id.indexOf('qd_') !== 0) return;
+            if (t.id === 'qd_nivel') { Q.nivel = t.value; Q.val = ''; } else if (t.id === 'qd_val') Q.val = t.value; else if (t.id === 'qd_ano') Q.ano = t.value; else if (t.id === 'qd_sev') Q.sev = t.value;
+            consRender();
+        });
+        var tm;
+        cons.addEventListener('input', function (ev) {
+            var t = ev.target; if (!t || t.id !== 'qd_busca') return; Q.busca = t.value; clearTimeout(tm);
+            tm = setTimeout(function () { consRender(); var n = cons.querySelector('#qd_busca'); if (n) { n.focus(); try { n.setSelectionRange(n.value.length, n.value.length); } catch (e) { } } }, 400);
+        });
+        cons.addEventListener('click', function (ev) {
+            var b = ev.target && ev.target.closest ? ev.target.closest('[data-ca]') : null; if (!b) return; var a = b.getAttribute('data-ca'), T, F, ref = Q.nivel + ':' + (Q.val || 'todos') + ' ano:' + (Q.ano || 'todos');
+            if (a === 'qdCsv') { csv([['Gravidade', 'Alerta', 'Escola', 'ZIP', 'Turma', 'Detalhe']].concat(ULT.A.map(function (x) { return [SEVN[x.sev], x.tipo, x.esc, x.zip, x.turma, x.det]; })), 'alertas_qualidade_dados'); audit('Extracção de alertas de qualidade (CSV)', ref); return; }
+            if (a !== 'anCsvE' && a !== 'anCsvA' && a !== 'anCsvP') return;
+            T = recolher(); F = filtrar(T);
+            if (a === 'anCsvA') {
+                var r = [['Escola', 'ZIP', 'Distrito', 'Província', 'Ano lectivo', 'Classe', 'Turma', 'Nome completo', 'Sexo (H/M)', 'Data de nascimento', 'Situação']];
+                F.forEach(function (t) { (t.d.alunos || []).forEach(function (x) { r.push([t.esc, t.zip, t.dist, t.prov, t.d.ano || '', t.d.classe || '', t.d.turma || '', x.nome, sx(x), x.nasc || '', ehDes(x) ? 'Desistente' : '']); }); });
+                csv(r, 'alunos'); audit('Extracção de lista de alunos (CSV)', ref);
+            } else if (a === 'anCsvE') {
+                var e = {}; F.forEach(function (t) { var o = e[t.eid] = e[t.eid] || { t: t, tu: 0, n: 0, H: 0, M: 0, d: 0 }; o.tu++; (t.d.alunos || []).forEach(function (x) { o.n++; o[sx(x)]++; if (ehDes(x)) o.d++; }); });
+                csv([['Escola', 'ZIP', 'Distrito', 'Província', 'Turmas', 'Alunos', 'H', 'M', 'Desistentes']].concat(Object.keys(e).map(function (k) { var o = e[k]; return [o.t.esc, o.t.zip, o.t.dist, o.t.prov, o.tu, o.n, o.H, o.M, o.d]; })), 'escolas_resumo'); audit('Extracção de resumo por escola (CSV)', ref);
+            } else {
+                var p = {}, r2 = [['Professor', 'Escola', 'ZIP', 'Ano lectivo', 'Turmas', 'Disciplinas', 'Horas/semana']];
+                F.forEach(function (t) { var n = N(t.d.professor); if (!n) return; var h = 0, ch = t.d.cargaH || {}; Object.keys(ch).forEach(function (k) { var v = parseFloat(String(ch[k]).replace(',', '.')); if (!isNaN(v) && v > 0) h += v; }); var o = p[n + '|' + t.eid + '|' + t.d.ano] = p[n + '|' + t.eid + '|' + t.d.ano] || { n: t.d.professor, t: [], ds: {}, h: 0, e: t.esc, z: t.zip, a: t.d.ano || '' }; o.t.push((t.d.classe || '?') + 'ª ' + (t.d.turma || '?')); o.h += h; (t.d.disciplinas || []).forEach(function (x) { o.ds[x] = 1; }); });
+                Object.keys(p).forEach(function (k) { var o = p[k]; r2.push([o.n, o.e, o.z, o.a, o.t.join(', '), Object.keys(o.ds).join(', '), Math.round(o.h * 10) / 10]); });
+                csv(r2, 'professores'); audit('Extracção de lista de professores (CSV)', ref);
+            }
+        });
+
+        G.GE_V2.qual = vQual; G.GE_V2.analise = vAnalise;
+        G.GE_TABS.push(['analise', 'Alunos e professores'], ['qual', 'Qualidade dos dados']);
+    } catch (e) { try { console.error('Módulo qualidade/análise:', e); } catch (x) { } }
 })();
 </script>
 </body>
